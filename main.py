@@ -39,7 +39,7 @@ application_version = '1.2'
 class Config:
     room_id: int = 100  # 默认直播间
     sound: str = ''  # 音源
-    play_queue_limit: int = 5  # 弹幕播报队列数量限制
+    play_queue_limit: int = 10  # 弹幕播报队列数量限制
     play_interval: float = 1  # 弹幕播报间隔 单位秒
     log_max_lines: int = 1000  # 日志最大行数
 
@@ -177,18 +177,18 @@ class Controller(Thread):
                 await file.write(Config.to_json(config, ensure_ascii=False, indent=2))
             self.__previous_config__ = dataclasses.replace(config)
 
-    def vits_infer(self, sound_name,infer_text):
-        response = requests.post(f"https://tomato3-vits-{sound_name}.hf.space/run/tts", json={
+    def vits_infer(self, speakr_name, infer_text):
+        response = requests.post(f"https://tomato3-vits-{speakr_name}.hf.space/run/tts", json={
 	        "data": [
 	    	infer_text,
-	    	sound_name,
+	    	speakr_name,
 	    	"简体中文",
 	    	1,
 	        ]
         }).json()
         data = response["data"][1]["name"]
-        wav_url = f"https://tomato3-vits-{sound_name}.hf.space/file={data}"
-        return(wav_url)
+        mp3_url = f"https://tomato3-vits-{speakr_name}.hf.space/file={data}"
+        return(mp3_url)
 
     async def start_player(self):
         """
@@ -196,25 +196,25 @@ class Controller(Thread):
         :return:
         """
         executor = ThreadPoolExecutor(1)
-        wav_file = 'tmp.wav'
+        mp3_file = 'tmp.mp3'
         async with httpx.AsyncClient() as client:
             while True:
                 text: str = await self.play_queue.get()
                 username: str = await self.play_queue.get()
                 self.log(f'播放 [{username}]: {text}')
                 # noinspection HttpUrlsUsage
-                url = f"{self.vits_infer(self.sound_control.value, text)}"
+                url = f"{self.vits_infer(self.sound_control.value,text)}"
                 is_fail = False
                 try:
                     response = await client.get(url)
                     if response.status_code == 200:
-                        wav = response.content
-                        if await async_os.path.exists(wav_file):
-                            await async_os.remove(wav_file)
-                        async with aiofiles.open(wav_file, 'wb') as file:
-                            await file.write(wav)
-                        await self.loop.run_in_executor(executor, playsound, os.getcwd() + '/tmp.wav')
-                        await async_os.remove(wav_file)
+                        mp3 = response.content
+                        if await async_os.path.exists(mp3_file):
+                            await async_os.remove(mp3_file)
+                        async with aiofiles.open(mp3_file, 'wb') as file:
+                            await file.write(mp3)
+                        await self.loop.run_in_executor(executor, playsound, os.getcwd() + '/tmp.mp3')
+                        await async_os.remove(mp3_file)
                     else:
                         # 下载音频失败
                         is_fail = True
@@ -238,7 +238,8 @@ class Controller(Thread):
         while self.play_queue.qsize() >= self.config.play_queue_limit:
             try:
                 text = self.play_queue.get_nowait()
-                self.log(f'丢弃弹幕: {text}')
+                username = self.play_queue.get_nowait()
+                self.log(f'丢弃弹幕 [{username}] {text}')
             except QueueEmpty:
                 pass
         await self.play_queue.put(text)
@@ -341,8 +342,8 @@ class Controller(Thread):
 
 def main(page: Page):
     controller = Controller()
-    page.window_width = 400
-    page.window_height = 650
+    page.window_width = 500
+    page.window_height = 800
     page.window_resizable = False
     if is_windows:
         page.theme = Theme(font_family='微软雅黑')
@@ -409,7 +410,7 @@ def main(page: Page):
                 content=ListView(
                     ref=controller.log_ref,
                     auto_scroll=True,
-                    height=250,
+                    height=400,
                     width=page.window_width * 0.8
                 )
             ),
@@ -423,4 +424,4 @@ def main(page: Page):
     controller.start()
 
 
-flet.app(target=main, assets_dir="assets")
+flet.app(target=main)

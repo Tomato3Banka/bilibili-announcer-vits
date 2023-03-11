@@ -1,0 +1,6 @@
+requests
+aiofiles
+flet
+bilibili-api-python
+dataclasses_json
+playsound==1.2.2
