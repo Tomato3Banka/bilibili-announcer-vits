@@ -4,6 +4,7 @@ import dataclasses
 import json
 import logging
 import os
+import requests
 
 import platform
 import re
@@ -29,8 +30,8 @@ from sounds import sound_sources
 _locale._getdefaultlocale = (lambda *args: ['zh_CN', 'utf8'])
 is_windows = platform.system() == 'Windows'
 
-application_name = '派蒙弹幕姬'
-application_version = '1.1'
+application_name = 'AI弹幕姬'
+application_version = '1.2'
 
 
 @dataclass_json
@@ -176,30 +177,44 @@ class Controller(Thread):
                 await file.write(Config.to_json(config, ensure_ascii=False, indent=2))
             self.__previous_config__ = dataclasses.replace(config)
 
+    def vits_infer(self, sound_name,infer_text):
+        response = requests.post(f"https://tomato3-vits-{sound_name}.hf.space/run/tts", json={
+	        "data": [
+	    	infer_text,
+	    	sound_name,
+	    	"简体中文",
+	    	1,
+	        ]
+        }).json()
+        data = response["data"][1]["name"]
+        wav_url = f"https://tomato3-vits-{sound_name}.hf.space/file={data}"
+        return(wav_url)
+
     async def start_player(self):
         """
         启动播放任务
         :return:
         """
         executor = ThreadPoolExecutor(1)
-        mp3_file = 'tmp.mp3'
+        wav_file = 'tmp.wav'
         async with httpx.AsyncClient() as client:
             while True:
                 text: str = await self.play_queue.get()
-                self.log(f'播放: [{self.sound_control.value}] {text}')
+                username: str = await self.play_queue.get()
+                self.log(f'播放 [{username}]: {text}')
                 # noinspection HttpUrlsUsage
-                url = f"http://233366.proxy.nscc-gz.cn:8888?speaker={self.sound_control.value}&text={text}"
+                url = f"{self.vits_infer(self.sound_control.value, text)}"
                 is_fail = False
                 try:
                     response = await client.get(url)
                     if response.status_code == 200:
-                        mp3 = response.content
-                        if await async_os.path.exists(mp3_file):
-                            await async_os.remove(mp3_file)
-                        async with aiofiles.open(mp3_file, 'wb') as file:
-                            await file.write(mp3)
-                        await self.loop.run_in_executor(executor, playsound, os.getcwd() + '/tmp.mp3')
-                        await async_os.remove(mp3_file)
+                        wav = response.content
+                        if await async_os.path.exists(wav_file):
+                            await async_os.remove(wav_file)
+                        async with aiofiles.open(wav_file, 'wb') as file:
+                            await file.write(wav)
+                        await self.loop.run_in_executor(executor, playsound, os.getcwd() + '/tmp.wav')
+                        await async_os.remove(wav_file)
                     else:
                         # 下载音频失败
                         is_fail = True
@@ -210,10 +225,10 @@ class Controller(Thread):
                     pass
                 finally:
                     if is_fail:
-                        self.log(f'播放 [{self.sound_control.value}] {text} 失败')
+                        self.log(f'播放 [{username}] {text} 失败')
                     await asyncio.sleep(self.config.play_interval)
 
-    async def add_play_task(self, text: str):
+    async def add_play_task(self, text: str, username: str):
         """
         添加播放任务
         :param text: 播放文本
@@ -227,6 +242,7 @@ class Controller(Thread):
             except QueueEmpty:
                 pass
         await self.play_queue.put(text)
+        await self.play_queue.put(username)
         await asyncio.sleep(self.config.play_interval)
 
     async def connect(self, room_id: int):
@@ -248,13 +264,14 @@ class Controller(Thread):
         @room.on('DANMU_MSG')
         async def on_danmaku(event):
             text = event['data']['info'][1]
+            username = event["data"]["info"][2][1]
             # TODO 优化弹幕过滤机制
             # 必须包含中文 或 只有一种字符
             if not re.match('[\w\W]*[\u4e00-\u9fa5]+[\w\W]*', text) \
                     or len(set(text)) == 1:
                 self.log(f'过滤弹幕: {text}')
                 return
-            await self.add_play_task(text)
+            await self.add_play_task(text, username)
 
         try:
             await room.connect()
@@ -406,4 +423,4 @@ def main(page: Page):
     controller.start()
 
 
-flet.app(target=main)
+flet.app(target=main, assets_dir="assets")
