@@ -177,7 +177,7 @@ class Controller(Thread):
                 await file.write(Config.to_json(config, ensure_ascii=False, indent=2))
             self.__previous_config__ = dataclasses.replace(config)
 
-    def vits_infer(self, sound_name,infer_text):
+    def vits_infer(self, sound_name, infer_text):
         response = requests.post(f"https://tomato3-vits-{sound_name}.hf.space/run/tts", json={
 	        "data": [
 	    	infer_text,
