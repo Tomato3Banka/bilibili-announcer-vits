@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import requests
+import traceback
 
 import platform
 import re
@@ -220,6 +221,7 @@ class Controller(Thread):
                         is_fail = True
                         pass
                 except Exception:
+                    traceback.print_exc()
                     # 下载音频失败
                     is_fail = True
                     pass
