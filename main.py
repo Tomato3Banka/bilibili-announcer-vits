@@ -32,7 +32,7 @@ _locale._getdefaultlocale = (lambda *args: ['zh_CN', 'utf8'])
 is_windows = platform.system() == 'Windows'
 
 application_name = 'AI弹幕姬'
-application_version = '1.2'
+application_version = '1.2.1'
 
 
 @dataclass_json
@@ -208,6 +208,7 @@ class Controller(Thread):
                 is_fail = False
                 try:
                     response = await client.get(url)
+                    print(response)
                     if response.status_code == 200:
                         mp3 = response.content
                         if await async_os.path.exists(mp3_file):

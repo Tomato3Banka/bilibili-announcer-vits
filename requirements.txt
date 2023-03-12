@@ -3,4 +3,4 @@ aiofiles
 flet
 bilibili-api-python
 dataclasses_json
-playsound==1.2.2
+playsound==1.3.0
